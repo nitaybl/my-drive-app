@@ -1,0 +1,60 @@
+// File: prisma/schema.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("POSTGRES_PRISMA_URL")
+  directUrl = env("POSTGRES_URL_NON_POOLING")
+}
+
+// User model for storing user information
+model User {
+  id                  String    @id @default(cuid())
+  name                String?
+  email               String?   @unique
+  password_hash       String?   // Stores the hashed password
+  emailVerified       DateTime? @map("emailVerified")
+  image               String?
+  storageQuota        BigInt?   @default(214748364800) @map("storageQuota")
+  storageUsed         BigInt?   @default(0) @map("storageUsed")
+  googleDriveFolderId String?   @map("googleDriveFolderId")
+  
+  // Relations to other models
+  accounts            Account[]
+  sessions            Session[]
+}
+
+// Account model for NextAuth.js providers (not used for credentials, but good to have)
+model Account {
+  id                 String  @id @default(cuid())
+  userId             String  @map("userId")
+  type               String
+  provider           String
+  providerAccountId  String  @map("providerAccountId")
+  refresh_token      String?
+  access_token       String?
+  expires_at         Int?
+  token_type         String?
+  scope              String?
+  id_token           String?
+  session_state      String?
+
+  // Corrected relation: 'user' is the field name, 'User' is the type
+  user               User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+// Session model for managing user sessions
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique @map("sessionToken")
+  userId       String   @map("userId")
+  expires      DateTime
+
+  // Corrected relation: 'user' is the field name, 'User' is the type
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
