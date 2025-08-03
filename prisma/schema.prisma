@@ -10,51 +10,60 @@ datasource db {
   directUrl = env("POSTGRES_URL_NON_POOLING")
 }
 
-// User model for storing user information
+// Enum for User Roles
+enum UserRole {
+  USER
+  ADMIN
+}
+
 model User {
   id                  String    @id @default(cuid())
   name                String?
   email               String?   @unique
-  password_hash       String?   // Stores the hashed password
+  password_hash       String?
   emailVerified       DateTime? @map("emailVerified")
   image               String?
   storageQuota        BigInt?   @default(214748364800) @map("storageQuota")
   storageUsed         BigInt?   @default(0) @map("storageUsed")
   googleDriveFolderId String?   @map("googleDriveFolderId")
-  
-  // Relations to other models
-  accounts            Account[]
-  sessions            Session[]
+  role                UserRole  @default(USER) // <-- ADD THIS LINE FOR ADMIN ROLE
+
+  accounts Account[]
+  sessions Session[]
 }
 
-// Account model for NextAuth.js providers (not used for credentials, but good to have)
 model Account {
-  id                 String  @id @default(cuid())
-  userId             String  @map("userId")
-  type               String
-  provider           String
-  providerAccountId  String  @map("providerAccountId")
-  refresh_token      String?
-  access_token       String?
-  expires_at         Int?
-  token_type         String?
-  scope              String?
-  id_token           String?
-  session_state      String?
-
-  // Corrected relation: 'user' is the field name, 'User' is the type
-  user               User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id                String  @id @default(cuid())
+  userId            String  @map("userId")
+  type              String
+  provider          String
+  providerAccountId String  @map("providerAccountId")
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([provider, providerAccountId])
 }
 
-// Session model for managing user sessions
 model Session {
   id           String   @id @default(cuid())
   sessionToken String   @unique @map("sessionToken")
   userId       String   @map("userId")
   expires      DateTime
-
-  // Corrected relation: 'user' is the field name, 'User' is the type
   user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// NEW MODEL for Invitation Codes
+model Invitation {
+  id        String   @id @default(cuid())
+  code      String   @unique
+  expiresAt DateTime
+  used      Boolean  @default(false)
+  usedBy    String? // Will store the email of the user who redeemed it
+  createdAt DateTime @default(now())
 }
