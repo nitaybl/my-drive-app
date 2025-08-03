@@ -64,18 +64,19 @@ export const authOptions: AuthOptions = {
           where: { email: credentials.email },
         });
 
-        if (!user) {
+        // If the user doesn't exist or doesn't have a password, fail authorization.
+        if (!user || !user.password_hash) {
           return null;
         }
 
-        // The user model from the DB needs a password field. Let's assume it exists.
-        // We need to adjust the prisma schema to include `password_hash`.
-        const passwordMatch = await compare(credentials.password, (user as any).password_hash);
+        // Safely compare the provided password with the stored hash
+        const passwordMatch = await compare(credentials.password, user.password_hash);
 
         if (!passwordMatch) {
           return null;
         }
 
+        // Return the user object if the password is correct
         return {
             id: user.id,
             name: user.name,

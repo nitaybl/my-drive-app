@@ -24,9 +24,9 @@ export async function POST(req: NextRequest) {
 
     const password_hash = await hash(password, 10);
 
-    // We need to tell Prisma about the password_hash field.
-    // This requires a schema modification.
-    const user = await (prisma.user as any).create({
+    // Create the user in the database without the unsafe 'any' cast
+    // The 'user' variable is not needed here, so we remove it to fix the unused variable warning.
+    await prisma.user.create({
       data: {
         name,
         email,
