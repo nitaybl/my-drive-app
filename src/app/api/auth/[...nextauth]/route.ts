@@ -45,8 +45,8 @@ const createDriveFolder = async (userName: string) => {
   }
 };
 
-
-export const authOptions: AuthOptions = {
+// This is no longer exported directly to fix the build error.
+const authOptions: AuthOptions = {
   adapter: PrismaAdapter(prisma),
   providers: [
     CredentialsProvider({
