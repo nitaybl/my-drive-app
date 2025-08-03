@@ -1,8 +1,13 @@
 // File: src/types/next-auth.d.ts
 
-import NextAuth, { DefaultSession, User } from "next-auth"
+import { DefaultSession } from "next-auth"
+
+// Removed unused imports
 
 declare module "next-auth" {
+  /**
+   * Returned by `useSession`, `getSession` and received as a prop on the `SessionProvider` React Context
+   */
   interface Session {
     user: {
       id: string;

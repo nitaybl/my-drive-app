@@ -2,21 +2,20 @@
 
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
-import { authOptions } from '../../auth/[...nextauth]/route';
+import { authOptions } from '../../auth/[...nextauth]/route'; // Correct import path
 import { PrismaClient } from '@prisma/client';
 import { randomBytes } from 'crypto';
 
 const prisma = new PrismaClient();
 
-// Helper to generate a random, more readable code
 const generateInviteCode = () => {
     return randomBytes(4).toString('hex').toUpperCase();
 };
 
-// GET: List all existing invitation codes
 export async function GET() {
     const session = await getServerSession(authOptions);
-    if (!session || (session.user as any)?.role !== 'ADMIN') {
+    // No longer using 'as any'
+    if (!session || session.user?.role !== 'ADMIN') {
         return NextResponse.json({ message: 'Forbidden' }, { status: 403 });
     }
 
@@ -25,20 +24,20 @@ export async function GET() {
             orderBy: { createdAt: 'desc' },
         });
         return NextResponse.json(invitations);
-    } catch (error) {
+    } catch {
         return NextResponse.json({ message: 'Internal Server Error' }, { status: 500 });
     }
 }
 
-// POST: Generate a new invitation code
 export async function POST(req: Request) {
     const session = await getServerSession(authOptions);
-    if (!session || (session.user as any)?.role !== 'ADMIN') {
+    // No longer using 'as any'
+    if (!session || session.user?.role !== 'ADMIN') {
         return NextResponse.json({ message: 'Forbidden' }, { status: 403 });
     }
 
     try {
-        const { validity } = await req.json(); // e.g., 'day', 'week', 'month', 'lifetime'
+        const { validity } = await req.json();
         const expiresAt = new Date();
 
         if (validity === 'day') expiresAt.setDate(expiresAt.getDate() + 1);
@@ -55,7 +54,7 @@ export async function POST(req: Request) {
         });
 
         return NextResponse.json(newInvite, { status: 201 });
-    } catch (error) {
+    } catch {
         return NextResponse.json({ message: 'Internal Server Error' }, { status: 500 });
     }
 }

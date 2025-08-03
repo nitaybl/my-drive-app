@@ -27,18 +27,18 @@ const FileIcon = ({ mimeType }: { mimeType: string }) => {
   if (mimeType === 'application/vnd.google-apps.folder') {
     return <span className="text-5xl text-yellow-400">📁</span>;
   }
-  // Add more specific icons based on mimeType if desired
   return <span className="text-5xl text-gray-400">📄</span>;
 };
 
-const formatBytes = (bytes: number, decimals = 2) => {
+const formatBytes = (bytesStr: string | number | bigint | undefined, decimals = 2) => {
+    const bytes = Number(bytesStr || 0);
     if (bytes === 0) return '0 Bytes';
     const k = 1024;
     const dm = decimals < 0 ? 0 : decimals;
     const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
     const i = Math.floor(Math.log(bytes) / Math.log(k));
     return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
-}
+};
 
 // --- MAIN DASHBOARD COMPONENT ---
 export default function DashboardPage() {
@@ -52,9 +52,10 @@ export default function DashboardPage() {
   const [contextMenu, setContextMenu] = useState<ContextMenu>({ visible: false, x: 0, y: 0, file: null });
   const [shareLink, setShareLink] = useState('');
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
+  const [uploadStatus, setUploadStatus] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const userDriveRootId = (session?.user as any)?.googleDriveFolderId;
+  const userDriveRootId = session?.user?.googleDriveFolderId;
 
   // Data Fetching
   const fetchFiles = useCallback(async (folderId: string) => {
@@ -97,35 +98,40 @@ export default function DashboardPage() {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    setUploadStatus(`Uploading ${file.name}...`);
     const formData = new FormData();
     formData.append('file', file);
     const currentFolderId = path[path.length - 1].id;
     formData.append('parentId', currentFolderId);
 
-    // TODO: Add visual feedback for upload progress
     const res = await fetch('/api/drive/files', { method: 'POST', body: formData });
+    
     if (res.ok) {
-        fetchFiles(currentFolderId); // Refresh file list
-        updateSession(); // Update session to get new storage usage
+        fetchFiles(currentFolderId);
+        await updateSession(); // Update session to get new storage usage
+        setUploadStatus(`Successfully uploaded ${file.name}!`);
     } else {
-        alert('Upload failed!');
+        const data = await res.json();
+        setUploadStatus(`Upload failed: ${data.message}`);
     }
-    // Reset file input
+    
+    setTimeout(() => setUploadStatus(''), 3000);
     if(fileInputRef.current) fileInputRef.current.value = "";
   };
   
   const handleNewFolder = async () => {
     const folderName = prompt("Enter new folder name:");
-    if (!folderName) return;
+    if (!folderName || folderName.trim() === '') return;
 
+    const currentFolderId = path[path.length - 1].id;
     const res = await fetch('/api/drive/files', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: folderName, parentId: path[path.length - 1].id, type: 'folder' }),
+        body: JSON.stringify({ name: folderName.trim(), parentId: currentFolderId }),
     });
 
     if(res.ok) {
-        fetchFiles(path[path.length - 1].id);
+        fetchFiles(currentFolderId);
     } else {
         alert('Failed to create folder.');
     }
@@ -133,6 +139,7 @@ export default function DashboardPage() {
 
   const handleContextMenu = (e: React.MouseEvent, file: DriveFile) => {
     e.preventDefault();
+    e.stopPropagation();
     setContextMenu({ visible: true, x: e.clientX, y: e.clientY, file });
   };
   
@@ -147,15 +154,17 @@ export default function DashboardPage() {
         const data = await res.json();
         setShareLink(data.shareLink);
         setIsShareModalOpen(true);
+    } else {
+        alert("Failed to create share link.");
     }
     setContextMenu({ ...contextMenu, visible: false });
   };
 
   // UI Components
   const StorageMeter = () => {
-    const storageUsed = Number((session?.user as any)?.storageUsed || 0);
-    const storageQuota = Number((session?.user as any)?.storageQuota || 1);
-    const percentage = (storageUsed / storageQuota) * 100;
+    const storageUsed = session?.user?.storageUsed || 0;
+    const storageQuota = session?.user?.storageQuota || 1;
+    const percentage = (Number(storageUsed) / Number(storageQuota)) * 100;
 
     let meterColor = 'bg-blue-500';
     if (percentage > 75) meterColor = 'bg-red-500';
@@ -177,7 +186,6 @@ export default function DashboardPage() {
 
   return (
     <div className="min-h-screen bg-gray-900 text-white font-sans flex" onClick={() => setContextMenu({ ...contextMenu, visible: false })}>
-      {/* Left Sidebar */}
       <aside className="w-64 bg-gray-800 p-4 flex flex-col shrink-0">
         <h1 className="text-2xl font-bold mb-8">My Drive</h1>
         <div className="space-y-4 mb-8">
@@ -185,12 +193,12 @@ export default function DashboardPage() {
             <button onClick={() => fileInputRef.current?.click()} className="w-full text-left p-3 rounded-lg bg-indigo-600 hover:bg-indigo-700 transition-colors">Upload File</button>
             <button onClick={handleNewFolder} className="w-full text-left p-3 rounded-lg bg-gray-700 hover:bg-gray-600 transition-colors">New Folder</button>
         </div>
+        {uploadStatus && <p className="text-xs text-center text-gray-400 mt-4">{uploadStatus}</p>}
         <div className="mt-auto">
             <StorageMeter />
         </div>
       </aside>
 
-      {/* Main Content */}
       <div className="flex-1 flex flex-col">
         <header className="bg-gray-800 border-l border-gray-700 p-4 flex justify-between items-center shrink-0">
             <div>
@@ -202,36 +210,38 @@ export default function DashboardPage() {
                 ))}
             </div>
             <div className="flex items-center space-x-4">
-                {(session?.user as any)?.role === 'ADMIN' && (
+                {session?.user?.role === 'ADMIN' && (
                     <Link href="/admin/users" className="px-3 py-1 text-sm rounded-full bg-green-600 hover:bg-green-700">Admin Panel</Link>
                 )}
                 <button onClick={() => signOut({ callbackUrl: '/login' })} className="px-4 py-2 text-sm font-medium rounded-md text-white bg-red-600 hover:bg-red-700">Sign Out</button>
             </div>
         </header>
         <main className="flex-1 p-8 overflow-y-auto">
-            {isLoading ? <p>Loading files...</p> : (
+            {isLoading ? <p>Loading files...</p> : files.length > 0 ? (
                 <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
                     {files.map(file => (
-                        <div key={file.id} onContextMenu={(e) => handleContextMenu(e, file)} onClick={() => file.mimeType === 'application/vnd.google-apps.folder' && handleFolderClick(file)} className="p-4 bg-gray-800 rounded-lg text-center cursor-pointer hover:bg-gray-700 transition-colors flex flex-col items-center justify-center">
+                        <div key={file.id} onContextMenu={(e) => handleContextMenu(e, file)} onClick={() => file.mimeType === 'application/vnd.google-apps.folder' && handleFolderClick(file)} className="p-4 bg-gray-800 rounded-lg text-center cursor-pointer hover:bg-gray-700 transition-colors flex flex-col items-center justify-center aspect-square">
                             <FileIcon mimeType={file.mimeType} />
                             <p className="mt-2 text-sm truncate w-full">{file.name}</p>
                         </div>
                     ))}
                 </div>
+            ) : (
+                <div className="text-center text-gray-500">This folder is empty.</div>
             )}
         </main>
       </div>
       
-      {/* Context Menu */}
       {contextMenu.visible && (
         <div style={{ top: contextMenu.y, left: contextMenu.x }} className="absolute bg-gray-700 rounded-md shadow-lg py-2 w-48 z-50">
-            <button onClick={handleShare} className="block w-full text-left px-4 py-2 text-sm hover:bg-gray-600">Share</button>
+            {contextMenu.file?.mimeType !== 'application/vnd.google-apps.folder' && 
+                <button onClick={handleShare} className="block w-full text-left px-4 py-2 text-sm hover:bg-gray-600">Share</button>
+            }
             <button className="block w-full text-left px-4 py-2 text-sm hover:bg-gray-600">Rename</button>
             <button className="block w-full text-left px-4 py-2 text-sm hover:bg-gray-600 text-red-400">Delete</button>
         </div>
       )}
 
-      {/* Share Modal */}
       {isShareModalOpen && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
             <div className="bg-gray-800 p-6 rounded-lg shadow-xl w-full max-w-md">
